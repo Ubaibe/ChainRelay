@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Private keys and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+credentials.json
+secrets.json
+
+# Coverage and test artifacts
+coverage/
+.nyc_output/
+*.lcov
+
+# Temporary logs and debug output
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# Generated artifacts
+dist/
+build/
+*.bundle.js
