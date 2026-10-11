@@ -14,6 +14,7 @@ const {
   constructTransferCall,
   estimateCallFee,
   dryRunCall,
+  inspectAccounts,
 } = require("./executor");
 const {
   createExecutionReceipt,
@@ -22,6 +23,9 @@ const {
   connect,
   disconnect,
 } = require("./chain");
+const {
+  runPreflightChecks,
+} = require("./preflight");
 
 /**
  * Run the read-only execution pipeline.
@@ -42,9 +46,11 @@ async function runExecutionPipeline({ intent, api, deps } = {}) {
     constructTransferCall,
     estimateCallFee,
     dryRunCall,
+    inspectAccounts,
     createExecutionReceipt,
     connect,
     disconnect,
+    runPreflightChecks,
   };
 
   let ownApi = false;
@@ -98,6 +104,29 @@ async function runExecutionPipeline({ intent, api, deps } = {}) {
       return result;
     }
 
+    // Step 4b — Run preflight checks
+    let preflightResult;
+    let accounts;
+    try {
+      // Fetch accounts once for preflight to avoid duplicate queries
+      accounts = await d.inspectAccounts(intent, pipelineApi);
+      preflightResult = await d.runPreflightChecks({ intent, feeEstimate, accounts }, pipelineApi);
+    } catch (err) {
+      result = failResult(intent, "PREFLIGHT", err);
+      return result;
+    }
+    if (!preflightResult.ok) {
+      result = {
+        ok: false,
+        stage: "PREFLIGHT",
+        intentId: intent.intentId || null,
+        receipt: null,
+        errors: preflightResult.errors,
+        preflight: { checks: preflightResult.checks, warnings: preflightResult.warnings },
+      };
+      return result;
+    }
+
     // Step 5 — Simulate
     let dryRunResult;
     try {
@@ -107,7 +136,7 @@ async function runExecutionPipeline({ intent, api, deps } = {}) {
         pipelineApi
       );
     } catch (err) {
-      result = failResult(intent, "SIMULATION", err);
+      result = failResult(intent, "SIMULATION", err, { checks: preflightResult.checks, warnings: preflightResult.warnings });
       return result;
     }
 
@@ -126,9 +155,10 @@ async function runExecutionPipeline({ intent, api, deps } = {}) {
         },
         feeEstimate,
         dryRunResult,
+        preflight: { checks: preflightResult.checks, warnings: preflightResult.warnings },
       });
     } catch (err) {
-      result = failResult(intent, "RECEIPT", err);
+      result = failResult(intent, "RECEIPT", err, { checks: preflightResult.checks, warnings: preflightResult.warnings });
       return result;
     }
 
@@ -138,6 +168,7 @@ async function runExecutionPipeline({ intent, api, deps } = {}) {
       stage: receipt.executionStatus,
       intentId: receipt.intentId,
       receipt,
+      preflight: { checks: preflightResult.checks, warnings: preflightResult.warnings },
       errors: ok ? [] : ["Simulation did not pass"],
     };
     return result;
@@ -163,14 +194,18 @@ async function runExecutionPipeline({ intent, api, deps } = {}) {
   }
 }
 
-function failResult(intent, stage, err) {
-  return {
+function failResult(intent, stage, err, preflight) {
+  const result = {
     ok: false,
     stage,
     intentId: intent.intentId || null,
     receipt: null,
     errors: [err.message || String(err)],
   };
+  if (preflight) {
+    result.preflight = preflight;
+  }
+  return result;
 }
 
 module.exports = {

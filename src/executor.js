@@ -163,7 +163,7 @@ async function estimateCallFee(call, signerAddress, api) {
         partialFee: info.partialFee.toString(),
         weight: info.weight.toString(),
         class: info.class ? info.class.toString() : null,
-        paysFee: info.paysFee !== undefined ? info.paysFee.toString() : null,
+        paysFee: info.paysFee != null ? info.paysFee.toString() : null,
         isEstimate: true,
         method: "paymentInfo",
       };
@@ -182,7 +182,7 @@ async function estimateCallFee(call, signerAddress, api) {
         partialFee: info.partialFee.toString(),
         weight: info.weight.toString(),
         class: info.class ? info.class.toString() : null,
-        paysFee: info.paysFee !== undefined ? info.paysFee.toString() : null,
+        paysFee: info.paysFee != null ? info.paysFee.toString() : null,
         isEstimate: true,
         method: "rpc.payment.queryInfo",
       };

@@ -15,9 +15,10 @@ const RECEIPT_VERSION = "1.0.0";
  * @param {object} [params.callDescription] - serializable call description from constructTransferCall
  * @param {object} [params.feeEstimate] - serializable fee estimate from estimateCallFee
  * @param {object} [params.dryRunResult] - serializable dry-run result from dryRunCall
+ * @param {object} [params.preflight] - optional preflight checks { checks, warnings }
  * @returns {object} JSON-serializable receipt
  */
-function createExecutionReceipt({ intent, callDescription, feeEstimate, dryRunResult }) {
+function createExecutionReceipt({ intent, callDescription, feeEstimate, dryRunResult, preflight }) {
   if (!intent) {
     throw new Error("Intent is required");
   }
@@ -97,6 +98,18 @@ function createExecutionReceipt({ intent, callDescription, feeEstimate, dryRunRe
     );
   }
 
+  // Preflight evidence
+  if (preflight) {
+    evidence.push({
+      type: "preflight_checks",
+      timestamp: Date.now(),
+      checks: preflight.checks,
+    });
+    if (preflight.warnings && preflight.warnings.length > 0) {
+      limitations.push(...preflight.warnings.map((w) => `Preflight: ${w}`));
+    }
+  }
+
   // Build the receipt
   const receipt = {
     receiptVersion: RECEIPT_VERSION,
@@ -110,6 +123,7 @@ function createExecutionReceipt({ intent, callDescription, feeEstimate, dryRunRe
     call: callDescription ? copyCallDescription(callDescription) : null,
     feeEstimate: feeEstimate ? copyFeeEstimate(feeEstimate) : null,
     simulation: dryRunResult ? copyDryRunResult(dryRunResult) : null,
+    preflight: preflight ? { checks: preflight.checks, warnings: preflight.warnings } : null,
     evidence,
     limitations,
   };
