@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "demo": "node scripts/demo.js"
+    "demo": "node scripts/demo.js",
+    "doctor": "node scripts/doctor.js"
   },
   "keywords": [
     "substrate",
