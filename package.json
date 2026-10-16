@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "demo": "node scripts/demo.js",
-    "doctor": "node scripts/doctor.js"
+    "doctor": "node scripts/doctor.js",
+    "cli": "node scripts/chainrelay.js"
   },
   "keywords": [
     "substrate",
