@@ -114,3 +114,93 @@ test("plan malformed JSON exits 2", () => {
   const result = runCli(["plan", "--file", file, "--json"]);
   assert.equal(result.status, 2);
 });
+
+test("readiness valid intent exits 0 with offline report", () => {
+  const file = path.join(os.tmpdir(), "ready-good.json");
+  const intent = {
+    action: "transfer",
+    asset: "POT",
+    amount: "1.5",
+    recipient: "5CShbTqxKUgKZBRDu1VGVpivm3m415stz86A5GBdoV7wrU1d",
+    signer: "5H728gLgx4yuCSVEwGCAfLo3RtzTau9F6cTNqNJtrqqjACWq",
+  };
+  fs.writeFileSync(file, JSON.stringify(intent));
+  const result = runCli(["readiness", "--file", file]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Offline readiness report/);
+  assert.match(result.stdout, /no RPC, signing, or submission/i);
+});
+
+test("readiness invalid intent exits 1", () => {
+  const file = path.join(os.tmpdir(), "ready-invalid.json");
+  fs.writeFileSync(file, JSON.stringify({ action: "nope", asset: "POT", amount: "0", recipient: "bad", signer: "5H728gLgx4yuCSVEwGCAfLo3RtzTau9F6cTNqNJtrqqjACWq" }));
+  const result = runCli(["readiness", "--file", file]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Intent is invalid/);
+});
+
+test("readiness missing file exits 2", () => {
+  const result = runCli(["readiness", "--file", path.join(os.tmpdir(), "nope-ready.json")]);
+  assert.equal(result.status, 2);
+});
+
+test("readiness malformed JSON exits 2", () => {
+  const file = path.join(os.tmpdir(), "ready-bad.json");
+  fs.writeFileSync(file, "{bad");
+  const result = runCli(["readiness", "--file", file, "--json"]);
+  assert.equal(result.status, 2);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.valid, false);
+});
+
+test("readiness --json reports NEEDS_NETWORK for unverified items", () => {
+  const file = path.join(os.tmpdir(), "ready-json.json");
+  const intent = {
+    action: "transferKeepAlive",
+    asset: "POT",
+    amount: "2",
+    recipient: "5CShbTqxKUgKZBRDu1VGVpivm3m415stz86A5GBdoV7wrU1d",
+    signer: "5H728gLgx4yuCSVEwGCAfLo3RtzTau9F6cTNqNJtrqqjACWq",
+  };
+  fs.writeFileSync(file, JSON.stringify(intent));
+  const result = runCli(["readiness", "--file", file, "--json"]);
+  assert.equal(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.offline, true);
+  assert.equal(parsed.noRpc, true);
+  assert.equal(parsed.noSigning, true);
+  assert.equal(parsed.noSubmission, true);
+  assert.equal(parsed.noOnChainVerification, true);
+  const networkChecks = parsed.checks.filter((c) => c.status === "NEEDS_NETWORK");
+  assert.equal(networkChecks.length, 4);
+});
+
+test("readiness unsupported asset exits 1", () => {
+  const file = path.join(os.tmpdir(), "ready-asset.json");
+  const intent = {
+    action: "transfer",
+    asset: "BTC",
+    amount: "1",
+    recipient: "5CShbTqxKUgKZBRDu1VGVpivm3m415stz86A5GBdoV7wrU1d",
+    signer: "5H728gLgx4yuCSVEwGCAfLo3RtzTau9F6cTNqNJtrqqjACWq",
+  };
+  fs.writeFileSync(file, JSON.stringify(intent));
+  const result = runCli(["readiness", "--file", file, "--json"]);
+  assert.equal(result.status, 1);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.valid, false);
+});
+
+test("readiness does not invoke rpc or signing", () => {
+  const file = path.join(os.tmpdir(), "ready-no-rpc.json");
+  const intent = {
+    action: "transfer",
+    asset: "POT",
+    amount: "1",
+    recipient: "5CShbTqxKUgKZBRDu1VGVpivm3m415stz86A5GBdoV7wrU1d",
+    signer: "5H728gLgx4yuCSVEwGCAfLo3RtzTau9F6cTNqNJtrqqjACWq",
+  };
+  fs.writeFileSync(file, JSON.stringify(intent));
+  const result = runCli(["readiness", "--file", file]);
+  assert.equal(result.status, 0);
+});

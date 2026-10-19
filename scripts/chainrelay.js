@@ -3,7 +3,8 @@
 "use strict";
 
 const fs = require("node:fs");
-const { validateIntent } = require("../src/intent");
+const { validateIntent, isValidSS58, SUPPORTED_ACTIONS, SUPPORTED_ASSETS } = require("../src/intent");
+const { toBaseUnits } = require("../src/amount");
 
 const EXIT_OK = 0;
 const EXIT_INVALID = 1;
@@ -45,6 +46,7 @@ function buildPlanPreview(intent) {
     note: "Offline preview only. No transaction has been constructed or executed.",
   };
 }
+
 function printHelp(stream = process.stdout) {
   stream.write(
     [
@@ -54,11 +56,13 @@ function printHelp(stream = process.stdout) {
       "  node scripts/chainrelay.js help",
       "  node scripts/chainrelay.js plan --file <path> [--json]",
       "  node scripts/chainrelay.js validate --file <path> [--json]",
+      "  node scripts/chainrelay.js readiness --file <path> [--json]",
       "",
       "Commands:",
       "  help       Show this help text",
       "  plan       Preview an execution plan offline (no RPC/call construction)",
       "  validate   Validate a JSON intent file offline",
+      "  readiness  Offline readiness report for a transaction intent",
       "",
       "No network, signing, or transaction submission is performed.",
       "",
@@ -66,7 +70,7 @@ function printHelp(stream = process.stdout) {
   );
 }
 
-function runValidate(options) {
+function readIntentFile(options) {
   if (!options.file) {
     throw new Error("Missing required option: --file <path>");
   }
@@ -89,6 +93,11 @@ function runValidate(options) {
     throw new Error("Intent file must contain a JSON object");
   }
 
+  return intent;
+}
+
+function runValidate(options) {
+  const intent = readIntentFile(options);
   const result = validateIntent(intent);
 
   if (options.json) {
@@ -106,27 +115,7 @@ function runValidate(options) {
 }
 
 function runPlan(options) {
-  if (!options.file) {
-    throw new Error("Missing required option: --file <path>");
-  }
-
-  let raw;
-  try {
-    raw = fs.readFileSync(options.file, "utf8");
-  } catch (err) {
-    throw new Error(`Unable to read file: ${options.file} (${err.message})`);
-  }
-
-  let intent;
-  try {
-    intent = JSON.parse(raw);
-  } catch (err) {
-    throw new Error(`Malformed JSON in ${options.file}: ${err.message}`);
-  }
-
-  if (typeof intent !== "object" || intent === null || Array.isArray(intent)) {
-    throw new Error("Intent file must contain a JSON object");
-  }
+  const intent = readIntentFile(options);
 
   const validation = validateIntent(intent);
   if (!validation.valid) {
@@ -161,6 +150,84 @@ function runPlan(options) {
   return EXIT_OK;
 }
 
+function runReadiness(options) {
+  const intent = readIntentFile(options);
+  const validation = validateIntent(intent);
+
+  let amountStatus = "FAIL";
+  let amountDetail = "Invalid amount.";
+  try {
+    const baseUnits = toBaseUnits(intent.amount, 14);
+    if (baseUnits > 0n) {
+      amountStatus = "PASS";
+      amountDetail = "Amount format and value valid.";
+    } else {
+      amountDetail = "Amount must be greater than zero.";
+    }
+  } catch (err) {
+    amountDetail = `Invalid amount: ${err.message}`;
+  }
+
+  const actionAssetStatus =
+    Object.values(SUPPORTED_ACTIONS).includes(intent.action) &&
+    Object.values(SUPPORTED_ASSETS).includes(intent.asset)
+      ? "PASS"
+      : "FAIL";
+
+  let deadlineStatus = "PASS";
+  let deadlineDetail = "No deadline provided.";
+  if (intent.deadline) {
+    if (intent.deadline <= Date.now()) {
+      deadlineStatus = "FAIL";
+      deadlineDetail = "Intent has expired (deadline must be in the future).";
+    } else {
+      deadlineDetail = "Deadline is in the future.";
+    }
+  }
+
+  const checks = [
+    { id: "intent_schema_action_asset", status: actionAssetStatus, detail: "Intent schema and supported action/asset." },
+    { id: "amount", status: amountStatus, detail: amountDetail },
+    { id: "recipient_address", status: (typeof intent.recipient === "string" && isValidSS58(intent.recipient)) ? "PASS" : "FAIL", detail: "Recipient SS58 address format." },
+    { id: "signer_address", status: (typeof intent.signer === "string" && isValidSS58(intent.signer)) ? "PASS" : "FAIL", detail: "Signer SS58 address format." },
+    { id: "deadline", status: deadlineStatus, detail: deadlineDetail },
+    { id: "account_balances_known", status: "NEEDS_NETWORK", detail: "Account balances are not available offline." },
+    { id: "fee_estimated", status: "NEEDS_NETWORK", detail: "Fee estimation requires network access." },
+    { id: "simulation_performed", status: "NEEDS_NETWORK", detail: "Transaction simulation requires network access." },
+    { id: "submission_or_confirmation_verified", status: "NEEDS_NETWORK", detail: "Submission and on-chain confirmation require network access." },
+  ];
+
+  const report = {
+    valid: validation.valid,
+    errors: validation.errors,
+    checks,
+    offline: true,
+    noRpc: true,
+    noSigning: true,
+    noSubmission: true,
+    noOnChainVerification: true,
+    note: "Offline readiness report only. No RPC connection, signing, submission, or on-chain verification occurred. This does not guarantee execution success.",
+  };
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(report) + "\n");
+  } else {
+    process.stdout.write("Offline readiness report (no RPC, signing, or submission):\n");
+    for (const c of checks) {
+      process.stdout.write(`${c.status.padEnd(14)} ${c.id}: ${c.detail}\n`);
+    }
+    if (!report.valid) {
+      process.stdout.write("Intent is invalid:\n");
+      for (const e of report.errors) {
+        process.stdout.write(`- ${e}\n`);
+      }
+    }
+    process.stdout.write(`${report.note}\n`);
+  }
+
+  return report.valid ? EXIT_OK : EXIT_INVALID;
+}
+
 function main(argv = process.argv) {
   const options = parseArgs(argv);
 
@@ -183,6 +250,12 @@ function main(argv = process.argv) {
           throw new Error(`Unsupported option: ${options.unknown.join(" ")}`);
         }
         return runPlan(options);
+
+      case "readiness":
+        if (options.unknown.length > 0) {
+          throw new Error(`Unsupported option: ${options.unknown.join(" ")}`);
+        }
+        return runReadiness(options);
 
       default:
         throw new Error(`Unsupported command: ${options.command}`);
@@ -210,6 +283,8 @@ module.exports = {
   parseArgs,
   printHelp,
   runValidate,
+  runPlan,
+  runReadiness,
   main,
   EXIT_OK,
   EXIT_INVALID,
