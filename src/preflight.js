@@ -237,9 +237,13 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
         throw new Error(validation.error);
       }
       const data = validation.data;
-      const freeZero = data.free === 0n;
-      const reservedZero = data.reserved === 0n;
-      const isEmpty = freeZero && reservedZero;
+      const free = data.free;
+      const reserved = data.reserved;
+      const miscFrozen = data.miscFrozen;
+      const feeFrozen = data.feeFrozen;
+      const frozen = data.frozen;
+      const isEmpty = free === 0n && reserved === 0n;
+      // Also consider frozen? empty means zero free/reserved regardless of frozen breakdown
 
       if (isEmpty) {
         checks.recipient = {
@@ -255,8 +259,10 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
             address: data.address || intent.recipient,
             free: data.free.toString(),
             reserved: data.reserved.toString(),
-            miscFrozen: data.miscFrozen.toString(),
-            feeFrozen: data.feeFrozen.toString(),
+            miscFrozen: data.miscFrozen !== null ? data.miscFrozen.toString() : null,
+            feeFrozen: data.feeFrozen !== null ? data.feeFrozen.toString() : null,
+            frozen: data.frozen !== null ? data.frozen.toString() : null,
+            flags: data.flags !== null ? data.flags.toString() : null,
           },
           inconclusive: false,
           reason: null,
@@ -299,14 +305,31 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
       }
       const feeBN = feeValidation.feeBN;
 
-      const availableForFees = free - miscFrozen - feeFrozen;
+      let availableForFees;
+      if (miscFrozen !== null && feeFrozen !== null) {
+        availableForFees = free - miscFrozen - feeFrozen;
+      } else {
+        // Unknown frozen breakdown; cannot safely compute spendable available for fees.
+        // Mark as conservative: set availableForFees to free - frozen if frozen known? No.
+        // Be conservative: treat unknown breakdown as if frozen affects availability? Or just flag.
+        // Choose safest: only subtract known frozen components if both present; else treat as unknown.
+        if (data.frozen !== null) {
+          // Single frozen value known; cannot split into misc/fee - conservative: subtract frozen from free
+          availableForFees = free - data.frozen;
+        } else {
+          availableForFees = free;
+        }
+      }
 
       const senderBalance = {
         address: data.address || intent.signer,
         free: data.free.toString(),
         reserved: data.reserved.toString(),
-        miscFrozen: data.miscFrozen.toString(),
-        feeFrozen: data.feeFrozen.toString(),
+        miscFrozen: data.miscFrozen !== null ? data.miscFrozen.toString() : null,
+        feeFrozen: data.feeFrozen !== null ? data.feeFrozen.toString() : null,
+        frozen: data.frozen !== null ? data.frozen.toString() : null,
+        flags: data.flags !== null ? data.flags.toString() : null,
+        frozenBreakdownKnown: data.frozenBreakdownKnown,
         availableForFees: availableForFees.toString(),
       };
 
@@ -326,11 +349,16 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
         }
         balanceWarnings.push("TRANSFER_ALL: transfer amount determined at execution; only fee affordability checked");
         // Frozen balances reduce available balance for fees; warn even for TRANSFER_ALL
-        if (miscFrozen > 0n || feeFrozen > 0n) {
+        if (miscFrozen !== null && feeFrozen !== null && (miscFrozen > 0n || feeFrozen > 0n)) {
           balanceWarnings.push("Frozen balances (miscFrozen/feeFrozen) reduce available balance for fees per conservative estimate; runtime semantics may vary");
+        } else if (data.frozen !== null && data.frozen > 0n) {
+          balanceWarnings.push("Frozen balance (frozen) reduces available balance for fees per conservative estimate; breakdown unknown on this runtime");
         }
         if (reserved > 0n) {
           balanceWarnings.push("Reserved balance exists but is excluded from available balance calculation; runtime semantics may vary");
+        }
+        if (!data.frozenBreakdownKnown) {
+          balanceWarnings.push("Frozen balance breakdown (miscFrozen/feeFrozen) not available on this runtime; using conservative fallback");
         }
       } else {
         if (!intent.amount || typeof intent.amount !== "string") {
@@ -339,9 +367,14 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
         const amountBN = toBaseUnits(intent.amount, 14);
         required = (amountBN + feeBN).toString();
 
-        // For fixed transfers, spendable balance = free - miscFrozen - feeFrozen
-        // (reserved is not available for transfers)
-        const spendable = free - miscFrozen - feeFrozen;
+        let spendable;
+        if (miscFrozen !== null && feeFrozen !== null) {
+          spendable = free - miscFrozen - feeFrozen;
+        } else if (data.frozen !== null) {
+          spendable = free - data.frozen;
+        } else {
+          spendable = free;
+        }
         if (spendable >= amountBN + feeBN) {
           spendability = SPENDABILITY.SUFFICIENT;
         } else {
@@ -351,11 +384,16 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
 
         // Note: This assumes miscFrozen and feeFrozen both reduce transferable balance.
         // Portaldot runtime semantics may differ; this is a conservative estimate.
-        if (miscFrozen > 0n || feeFrozen > 0n) {
+        if (miscFrozen !== null && feeFrozen !== null && (miscFrozen > 0n || feeFrozen > 0n)) {
           balanceWarnings.push("Frozen balances (miscFrozen/feeFrozen) reduce spendable balance per conservative estimate; runtime semantics may vary");
+        } else if (data.frozen !== null && data.frozen > 0n) {
+          balanceWarnings.push("Frozen balance (frozen) reduces spendable balance per conservative estimate; breakdown unknown on this runtime");
         }
         if (reserved > 0n) {
           balanceWarnings.push("Reserved balance exists but is excluded from spendable calculation; runtime semantics may vary");
+        }
+        if (!data.frozenBreakdownKnown) {
+          balanceWarnings.push("Frozen balance breakdown (miscFrozen/feeFrozen) not available on this runtime; using conservative fallback");
         }
       }
 
@@ -413,8 +451,8 @@ async function runPreflightChecks({ intent, feeEstimate, accounts }, api) {
  * Required fields for all calculations:
  * - free: string representing non-negative integer
  * - reserved: string representing non-negative integer
- * - miscFrozen: string representing non-negative integer
- * - feeFrozen: string representing non-negative integer
+ * Either (miscFrozen, feeFrozen) for legacy layout OR (frozen) for V3 layout.
+ * frozenBreakdownKnown indicates whether misc/fee split is known.
  *
  * Does not silently default missing/invalid fields to zero.
  * Returns a structured validation result.
@@ -428,7 +466,7 @@ function validateAccountSnapshot(account, label) {
     return { valid: false, data: null, error: `${label} account snapshot is missing or not an object` };
   }
 
-  const requiredFields = ["free", "reserved", "miscFrozen", "feeFrozen"];
+  const requiredFields = ["free", "reserved"];
   const data = {};
 
   for (const field of requiredFields) {
@@ -456,7 +494,64 @@ function validateAccountSnapshot(account, label) {
     }
   }
 
-  // address is optional in pre-fetched data (will fall back to intent)
+  // Handle frozen fields
+  const validateBigIntString = (value, fieldName) => {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "string") {
+      return { error: `${label} account field ${fieldName} must be a string, got ${typeof value}` };
+    }
+    const trimmed = value.trim();
+    if (trimmed === "") return { error: `${label} account field ${fieldName} must not be empty` };
+    if (trimmed.startsWith("-")) return { error: `${label} account field ${fieldName} must not be negative` };
+    if (!/^\d+$/.test(trimmed)) return { error: `${label} account field ${fieldName} must be a non-negative integer string` };
+    try {
+      return { value: BigInt(trimmed) };
+    } catch (err) {
+      return { error: `${label} account field ${fieldName} parsing failed: ${err.message}` };
+    }
+  };
+
+  const miscFrozenRes = validateBigIntString(account.miscFrozen, "miscFrozen");
+  if (miscFrozenRes && miscFrozenRes.error) return { valid: false, data: null, error: miscFrozenRes.error };
+  const feeFrozenRes = validateBigIntString(account.feeFrozen, "feeFrozen");
+  if (feeFrozenRes && feeFrozenRes.error) return { valid: false, data: null, error: feeFrozenRes.error };
+  const frozenRes = validateBigIntString(account.frozen, "frozen");
+  if (frozenRes && frozenRes.error) return { valid: false, data: null, error: frozenRes.error };
+
+  data.miscFrozen = miscFrozenRes && miscFrozenRes.value !== undefined ? miscFrozenRes.value : null;
+  data.feeFrozen = feeFrozenRes && feeFrozenRes.value !== undefined ? feeFrozenRes.value : null;
+  data.frozen = frozenRes && frozenRes.value !== undefined ? frozenRes.value : null;
+
+  // flags is optional
+  if (account.flags !== undefined && account.flags !== null) {
+    if (typeof account.flags !== "string") {
+      return { valid: false, data: null, error: `${label} account field flags must be a string, got ${typeof account.flags}` };
+    }
+    const trimmed = account.flags.trim();
+    try {
+      data.flags = BigInt(trimmed);
+    } catch (err) {
+      data.flags = null;
+    }
+  } else {
+    data.flags = null;
+  }
+
+  const hasLegacyFrozen = data.miscFrozen !== null && data.feeFrozen !== null;
+  const hasV3Frozen = data.frozen !== null;
+  data.frozenBreakdownKnown = hasLegacyFrozen;
+
+  // If only one of misc/fee present, breakdown unknown and incomplete for legacy layout
+  if ((data.miscFrozen !== null && data.feeFrozen === null) || (data.miscFrozen === null && data.feeFrozen !== null)) {
+    if (!hasV3Frozen) {
+      // Partial legacy fields with no V3 frozen - cannot map safely
+      const missing = data.miscFrozen !== null ? "feeFrozen" : "miscFrozen";
+      return { valid: false, data: null, error: `${label} account missing required field: ${missing}` };
+    }
+    data.frozenBreakdownKnown = false;
+  }
+
+  // address is optional
   const address = typeof account.address === "string" ? account.address.trim() : null;
 
   return { valid: true, data: { ...data, address }, error: null };

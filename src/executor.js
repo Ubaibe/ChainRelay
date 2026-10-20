@@ -34,13 +34,47 @@ async function inspectAccounts(intent, api) {
   const recipientAccount = await api.query.system.account(intent.recipient);
 
   function extractAccount(address, account) {
-    const data = account.data;
+    const data = account.data || {};
+    const getString = (v) => {
+      if (v === undefined || v === null) return null;
+      try {
+        return v.toString();
+      } catch (e) {
+        return null;
+      }
+    };
+    const free = getString(data.free);
+    const reserved = getString(data.reserved);
+    const miscFrozen = getString(data.miscFrozen);
+    const feeFrozen = getString(data.feeFrozen);
+    const frozen = getString(data.frozen);
+    const flags = getString(data.flags);
+
+    // Detect legacy vs V3 shapes
+    const hasLegacyFrozen = miscFrozen !== null && feeFrozen !== null;
+    const hasV3Frozen = frozen !== null;
+
+    let normalizedMiscFrozen = miscFrozen;
+    let normalizedFeeFrozen = feeFrozen;
+    let frozenBreakdownKnown = hasLegacyFrozen;
+
+    if (!frozenBreakdownKnown && hasV3Frozen) {
+      // V3 gives a single 'frozen' value; mapping to miscFrozen/feeFrozen is runtime-dependent.
+      // Do not assume equality; mark breakdown as unknown to keep preflight conservative.
+      frozenBreakdownKnown = false;
+      normalizedMiscFrozen = null;
+      normalizedFeeFrozen = null;
+    }
+
     return {
       address,
-      free: data.free.toString(),
-      reserved: data.reserved.toString(),
-      miscFrozen: data.miscFrozen.toString(),
-      feeFrozen: data.feeFrozen.toString(),
+      free,
+      reserved,
+      miscFrozen: normalizedMiscFrozen,
+      feeFrozen: normalizedFeeFrozen,
+      frozen,
+      flags,
+      frozenBreakdownKnown,
     };
   }
 
