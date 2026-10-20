@@ -272,3 +272,40 @@ npm test -- --experimental-test-coverage
 ## License
 
 ISC
+## Live V3 Demo (read-only)
+
+ChainRelay can inspect accounts, estimate fees, and run preflight checks against the official Portaldot V3 testnet without signing or submitting transactions.
+
+### Commands
+
+`ash
+# Install dependencies (if not already installed)
+npm install
+
+# Run offline tests
+npm test
+
+# Run offline demo (mocked)
+npm run demo
+
+# Run network doctor against V3
+PORTALDOT_WS_URL='wss://test-node-v3.portaldot.dev' npm run doctor
+
+# Run live read-only V3 demo
+PORTALDOT_WS_URL='wss://test-node-v3.portaldot.dev' npm run demo:v3
+`
+
+### What it shows
+- V3 account inspection (handles frozen/flags shape; legacy miscFrozen/feeFrozen when present)
+- Unsigned call construction (balances.transferKeepAlive)
+- Fee estimation via paymentInfo (estimates only)
+- Preflight checks with conservative warnings
+
+### What it does NOT prove
+- Transaction executability (fee estimates and passing preflight are not guarantees)
+- Successful submission/finalization (no signing or broadcasting)
+- Signed-transfer outcome (unsigned system.dryRun returning BadOrigin is an unsigned simulation limitation)
+- Frozen balance breakdown on V3 (semantics uncertain; handled conservatively with warnings)
+- Cross-chain/bridge execution
+
+All demo operations are read-only. No private keys, seed phrases, or testnet funds are requested.

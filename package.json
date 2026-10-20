@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test",
     "demo": "node scripts/demo.js",
+    "demo:v3": "node scripts/demo-v3.js",
     "doctor": "node scripts/doctor.js",
     "cli": "node scripts/chainrelay.js"
   },
