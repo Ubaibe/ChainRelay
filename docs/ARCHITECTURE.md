@@ -2,159 +2,70 @@
 
 ## Pipeline Overview
 
+```mermaid
+flowchart TD
+  A["Transaction Intent"] --> B["Intent Validation"]
+  B --> C{"Execution Mode"}
+  C -->|"Offline / Mock"| D["Mocked API and dependencies"]
+  C -->|"Live read-only"| E["Connect via WsProvider"]
+  D --> F["Construct unsigned call"]
+  E --> F
+  F --> G["Fee estimation<br/>paymentInfo or queryInfo"]
+  G --> H["Preflight checks<br/>balances, frozen, reserved"]
+  H --> I{"Dry-run available?"}
+  I -->|"Yes - live"| J["rpc.system.dryRun"]
+  I -->|"No - offline"| K["Skip simulation"]
+  J --> L["Build structured receipt"]
+  K --> L
+  L --> M["Receipt: status, evidence, limitations"]
+
+  style B fill:#e1f5ff
+  style F fill:#fff4e1
+  style G fill:#fff4e1
+  style H fill:#ffe1e1
+  style J fill:#e8f5e9
+  style L fill:#f3e5f5
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    runExecutionPipeline                         │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. VALIDATION (intent.js:createIntent)                          │
-│    - SS58 address validation (prefix 42)                        │
-│    - Amount: 1-14 decimals, positive, no scientific notation   │
-│    - Deadline: future timestamp                                 │
-│    - Action: transfer | transferKeepAlive | transferAll        │
-│    Output: { status: VALIDATED/REJECTED, intent?, errors? }    │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. PLANNING (plan.js:buildExecutionPlan)                        │
-│    - Constructs extrinsic based on action                       │
-│    - transfer: balances.transfer(dest, value)                  │
-│    - transferKeepAlive: balances.transferKeepAlive(dest, value)│
-│    - transferAll: balances.transferAll(dest, keepAlive)        │
-│    - Selects fee estimation method                              │
-│    Output: { steps[], feeEstimationMethod, ... }               │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 3. PREFLIGHT (preflight.js:runPreflightChecks)                  │
-│    - checkAccountExists(recipient) → exists | inconclusive     │
-│    - checkBalanceSufficiency(sender, amount, fee)              │
-│      * spendability: SUFFICIENT | INSUFFICIENT | INCONCLUSIVE  │
-│      * accounts for: free, reserved, miscFrozen, feeFrozen     │
-│      * TRANSFER_ALL: only validates fee affordability          │
-│    - Validates pre-fetched account snapshots if provided       │
-│      * validateAccountSnapshot() - strict field validation     │
-│    Output: { ok, checks[], warnings[], spendability }          │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    ▼                       ▼
-              ok: true                 ok: false
-                    │                       │
-                    ▼                       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 4. FEE ESTIMATION (executor.js:estimateFee)                     │
-│    Preferred: extrinsic.paymentInfo()                           │
-│    Fallback: rpc.payment.queryInfo(call, finalizedHead)        │
-│    Returns: { partialFee, weight, class, paysFee, method }     │
-│    paysFee: null (default) | "Signer" | "Tip" | "All"          │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 5. DRY-RUN SIMULATION (executor.js:simulateExecution)           │
-│    rpc.system.dryRun(extrinsic) → { Ok: { Ok } | { Err } | Err }│
-│    - Ok: { Ok }        → dispatchOk: true                      │
-│    - Ok: { Err }       → dispatchOk: false, dispatchError      │
-│    - Err               → rpcOk: false, rpcError                │
-│    Output: { rpcOk, dispatchOk, dispatchError, blockHash }     │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 6. RECEIPT BUILDING (receipt.js:buildReceipt)                   │
-│    Serializes all evidence into structured receipt             │
-│    Status mapping:                                              │
-│      - No fee, no dry-run           → PLANNED                  │
-│      - Fee estimated, no dry-run    → FEE_ESTIMATED            │
-│      - Dry-run: rpcOk && dispatchOk → SIMULATION_PASSED        │
-│      - Dry-run: !rpcOk || !dispatchOk → SIMULATION_FAILED      │
-│    Includes: preflight checks, warnings, limitations           │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+**Key distinction:**
+
+- **Offline / mock mode** - no network connection; mocked API and dependencies are used. No signing or submission.
+- **Live read-only mode** - connects to the endpoint given by `PORTALDOT_WS_URL` (for example the Portaldot V3 testnet) and performs read-only queries only: account inspection, fee estimation, and dry-run. No signing or submission.
 
 ## Component Responsibilities
 
 ### intent.js
-- `createIntent(input)` - Validates and creates intent object
+
+- `createIntent(input)` - validates and creates the intent object
 - `isValidSS58(address)` - SS58 prefix 42 validation
-- `validateAmount(amountStr)` - 14-decimal precision, no sci notation
-
-### plan.js
-- `buildExecutionPlan(intent, api)` - Builds 9-step execution plan
-- `validatePlan(plan)` - Validates plan structure
-- `constructTransferCall(action, recipient, amount)` - Builds extrinsic
-
-### preflight.js
-- `checkAccountExists(api, address)` - Queries system.account
-- `checkBalanceSufficiency(api, sender, amount, fee, action)` - Spendability logic
-- `validateAccountSnapshot(account, label)` - Validates pre-fetched account data
-- `runPreflightChecks(params)` - Orchestrates all preflight checks
+- `validateAmount(amountStr)` - 14-decimal precision validation
 
 ### executor.js
-- `estimateFee(api, call, signerAddress)` - Fee estimation (paymentInfo → queryInfo)
-- `simulateExecution(api, call)` - Dry-run via rpc.system.dryRun
-- `executePipelineSteps(api, plan, intent)` - Executes steps 4-5
+
+- `inspectAccounts(intent, api)` - queries `system.account` and normalizes legacy and V3 layouts
+- `constructTransferCall(intent, api)` - builds the unsigned extrinsic
+- `estimateCallFee(call, signerAddress, api)` - fee estimation via `paymentInfo`, falling back to `queryInfo`
+- `dryRunCall(call, signerAddress, api)` - dry-run via `rpc.system.dryRun`
+
+### preflight.js
+
+- `runPreflightChecks({ intent, feeEstimate, accounts }, api)` - orchestrates the preflight checks
+- `validateAccountSnapshot()` - validates account data and handles the V3 `frozen` / `flags` layout
+- balance sufficiency with conservative handling when the frozen breakdown is unknown
 
 ### pipeline.js
-- `runExecutionPipeline({ intent, api, accounts?, dryRun? })` - Main entry point
-- Connects/disconnects API
-- Orchestrates all stages
-- Handles errors with stage attribution
+
+- `runExecutionPipeline({ intent, api, deps })` - orchestrates the full flow
+- manages the connection lifecycle and attributes errors to a pipeline stage
 
 ### receipt.js
-- `buildReceipt({ intent, plan, feeEstimate, simulation, preflight, status })` - Builds receipt
-- `determineExecutionStatus(feeEstimate, simulation)` - Maps to status enum
-- JSON-serializable output
 
-## Data Flow
+- `createExecutionReceipt()` - builds a JSON-serializable receipt with evidence and limitations
+- status mapping: `PLANNED` -> `FEE_ESTIMATED` -> `SIMULATION_PASSED` / `SIMULATION_FAILED`
 
-```
-Input: { action, asset, amount, recipient, signer, deadline? }
-         │
-         ▼
-Intent: { id, action, asset, amount (base units), recipient, signer, deadline, status }
-         │
-         ▼
-Plan:   { steps[9], feeEstimationMethod, call, ... }
-         │
-         ▼
-Preflight: { ok, checks[], warnings[], spendability, recipientExists }
-         │
-         ▼
-FeeEstimate: { partialFee, weight, class, paysFee, method, isEstimate }
-         │
-         ▼
-Simulation: { rpcOk, dispatchOk, dispatchError, blockHash }
-         │
-         ▼
-Receipt: { version, executionStatus, intent, call, feeEstimate, simulation, preflight, limitations }
-```
+## Safety Guarantees
 
-## Error Handling
-
-Each stage produces structured errors with:
-- `stage`: Where failure occurred
-- `errors[]`: Human-readable messages
-- `receipt`: Partial receipt with evidence up to failure point
-
-Stages: VALIDATION, CALL_CONSTRUCTION, FEE_ESTIMATION, PREFLIGHT, SIMULATION, RECEIPT
-
-## Key Invariants
-
-1. **No live extrinsics in receipts** - `liveExtrinsic` stripped before serialization
-2. **BigInt as strings** - All amounts/fees serialized as strings
-3. **Preflight before simulation** - Simulation only runs if preflight passes
-4. **API lifecycle** - Caller-provided API not disconnected; internally created API always disconnected
-5. **Deterministic IDs** - Intent IDs from SHA256 of canonical fields
-
-## Extension Points
-
-- Add new actions: extend `constructTransferCall` and `checkBalanceSufficiency`
-- New fee methods: add to `estimateFee` fallback chain
-- Custom preflight checks: extend `runPreflightChecks`
-- New receipt fields: extend `buildReceipt` input object
+- No transaction signing, broadcasting, or submission
+- Monetary values are calculated with `BigInt` and serialized as strings
+- Conservative reporting when runtime semantics are uncertain
+- Limitations are recorded explicitly in every receipt
