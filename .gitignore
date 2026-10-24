@@ -40,3 +40,5 @@ Thumbs.db
 dist/
 build/
 *.bundle.js
+.vercel
+.env*
