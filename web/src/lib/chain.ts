@@ -23,6 +23,7 @@ export const EXPECTED_NETWORK = {
   tokenDecimals: 14,
   ss58Prefix: 42,
   evmChainId: '420420777',
+  genesisHash: '0xd4f9acbcf7f52388d8b095abe3c198d19fc510e0343e643e87cfbccb155283bd',
 } as const;
 
 export interface NetworkSnapshot {
@@ -135,6 +136,7 @@ export function diffNetwork(
   check('tokenSymbol', EXPECTED_NETWORK.tokenSymbol, snapshot.tokenSymbol);
   check('tokenDecimals', EXPECTED_NETWORK.tokenDecimals, snapshot.tokenDecimals);
   check('ss58Prefix', EXPECTED_NETWORK.ss58Prefix, snapshot.ss58Prefix);
+  check('genesisHash', EXPECTED_NETWORK.genesisHash, snapshot.genesisHash);
 
   return mismatches;
 }

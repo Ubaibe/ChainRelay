@@ -165,6 +165,25 @@ export function ResultsPanel({
               mono
             />
             <DataRow
+              label="Estimated remaining after amount + fee"
+              value={
+                result.account.signer?.free
+                  ? (() => {
+                      try {
+                        const free = BigInt(result.account.signer.free);
+                        const amount = BigInt(result.preview?.amountBaseUnits ?? '0');
+                        const fee = BigInt(result.fee.estimate.partialFee);
+                        const remaining = free - amount - fee;
+                        return `${formatBaseUnits(remaining.toString(), decimals)} tPOT`;
+                      } catch {
+                        return 'Unavailable';
+                      }
+                    })()
+                  : 'Unavailable'
+              }
+              mono
+            />
+            <DataRow
               label="Weight"
               value={formatWeight(result.fee.estimate.weight)}
               mono

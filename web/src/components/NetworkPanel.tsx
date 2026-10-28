@@ -23,6 +23,7 @@ export function NetworkPanel({
   network,
   onReconnect,
   busy,
+  lastUpdated,
 }: {
   endpoint: string;
   state: ConnectionState;
@@ -30,8 +31,20 @@ export function NetworkPanel({
   network: NetworkSnapshot | null;
   onReconnect: () => void;
   busy: boolean;
+  lastUpdated: number | null;
 }) {
   const mismatches: NetworkMismatch[] = network ? diffNetwork(network) : [];
+
+  const identityStatus =
+    state === 'connected'
+      ? network?.genesisHash === EXPECTED_NETWORK.genesisHash
+        ? 'Verified'
+        : network?.genesisHash
+          ? 'Mismatch'
+          : 'Unable to verify'
+      : state === 'connecting'
+        ? 'Connecting'
+        : 'Disconnected';
 
   return (
     <Panel
@@ -57,6 +70,15 @@ export function NetworkPanel({
       </div>
 
       <DataRow label="Endpoint" value={endpoint} mono />
+
+      <div className="row">
+        <span className="row__label">Network identity</span>
+        <span className={`state state--${identityStatus === 'Verified' ? 'connected' : identityStatus === 'Mismatch' ? 'error' : 'disconnected'}`}>
+          <span className="state__dot" aria-hidden="true" />
+          {identityStatus}
+        </span>
+      </div>
+
 
       {error ? (
         <div className="alert alert--error">
@@ -124,6 +146,12 @@ export function NetworkPanel({
               </ul>
             </div>
           )}
+
+          <DataRow
+            label="Last RPC update"
+            value={lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Unavailable'}
+            mono
+          />
 
           <p className="muted">
             Expected reference values: chain <code>{EXPECTED_NETWORK.chain}</code>, spec{' '}

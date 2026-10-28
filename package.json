@@ -4,7 +4,7 @@
   "description": "Offline read-only execution pipeline for Portaldot/Substrate chains",
   "main": "index.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test test/*.js",
     "demo": "node scripts/demo.js",
     "demo:v3": "node scripts/demo-v3.js",
     "doctor": "node scripts/doctor.js",

@@ -19,7 +19,7 @@ const MATCHING: NetworkSnapshot = {
   tokenSymbol: 'tPOT',
   tokenDecimals: 14,
   ss58Prefix: 42,
-  genesisHash: '0xd4f9acbc',
+  genesisHash: '0xd4f9acbcf7f52388d8b095abe3c198d19fc510e0343e643e87cfbccb155283bd',
 };
 
 describe('diffNetwork', () => {
@@ -64,6 +64,7 @@ describe('diffNetwork', () => {
       tokenDecimals: 14,
       ss58Prefix: 42,
       evmChainId: '420420777',
+      genesisHash: '0xd4f9acbcf7f52388d8b095abe3c198d19fc510e0343e643e87cfbccb155283bd',
     });
   });
 });

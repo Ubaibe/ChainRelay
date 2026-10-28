@@ -1,11 +1,13 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { NetworkPanel } from './components/NetworkPanel';
 import { ReadinessForm, type ReadinessFormValues } from './components/ReadinessForm';
 import { ResultsPanel } from './components/ResultsPanel';
-import { WalletPanel } from './components/WalletPanel';
+import { ReadinessChecklist } from './components/ReadinessChecklist';
 import { useNodeConnection } from './hooks/useNodeConnection';
 import { useWallet } from './hooks/useWallet';
+import { WalletPanel } from './components/WalletPanel';
+import { WalletBalanceOverview } from './components/WalletBalanceOverview';
 import { DEFAULT_WS_URL, EXPECTED_NETWORK } from './lib/chain';
 import { runReadinessCheck, type ReadinessResult } from './lib/readiness';
 
@@ -20,12 +22,26 @@ export default function App() {
   const [result, setResult] = useState<ReadinessResult | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [lastNetworkUpdate, setLastNetworkUpdate] = useState<number | null>(null);
   // Monotonic token: a slow run that finishes after a newer one started must
   // not overwrite the newer result.
   const runTokenRef = useRef(0);
 
   const decimals = connection.network?.tokenDecimals ?? EXPECTED_NETWORK.tokenDecimals;
   const ss58Prefix = connection.network?.ss58Prefix ?? null;
+
+  useEffect(() => {
+    if (connection.network) {
+      setLastNetworkUpdate(Date.now());
+    } else {
+      setLastNetworkUpdate(null);
+    }
+  }, [connection.network]);
+
+  useEffect(() => {
+    setResult(null);
+    setRunError(null);
+  }, [form, wallet.selectedAddress, connection.state, connection.network]);
 
   const runCheck = useCallback(async () => {
     const api = connection.getApi();
@@ -120,9 +136,25 @@ export default function App() {
             network={connection.network}
             onReconnect={() => void connection.connect()}
             busy={connection.busy}
+            lastUpdated={lastNetworkUpdate}
           />
 
           <WalletPanel wallet={wallet} />
+
+          <WalletBalanceOverview
+            walletAddress={wallet.selectedAddress}
+            result={result}
+            decimals={decimals}
+            getApi={connection.getApi}
+            networkState={connection.state}
+          />
+
+          <ReadinessChecklist
+            walletConnected={wallet.status === 'connected'}
+            networkOk={connection.state === 'connected' && !connection.error}
+            result={result}
+          />
+
 
           <section className="panel">
             <header className="panel__header">

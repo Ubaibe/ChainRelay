@@ -58,7 +58,25 @@ The live commands require network access to the endpoint. `npm test` and `npm ru
 
 ChainRelay does not perform cross-chain bridging, broadcasting, or on-chain execution.
 
-## Documentation
+## Web Dashboard Demo
+
+```bash
+# Install web dependencies
+cd web
+npm install
+
+# Run web tests
+npm test
+
+# Type-check and build
+npm run build
+
+# Start local dev server
+npm run dev
+```
+
+Open the local Vite URL, connect to `wss://test-node-v3.portaldot.dev`, inspect metadata, connect wallet via explicit click, enter recipient and amount, then run readiness check. No signing or submission occurs.
+
 
 - [Architecture](docs/ARCHITECTURE.md) - Pipeline flow, component responsibilities, and safety guarantees
 - [Development](docs/DEVELOPMENT.md) - Test commands and extension guide
