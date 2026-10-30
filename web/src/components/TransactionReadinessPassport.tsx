@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Panel } from './Primitives';
+import { TransactionEvidenceInspector } from './TransactionEvidenceInspector';
 import {
   passportToJson,
   passportToMarkdown,
@@ -98,6 +99,7 @@ export function TransactionReadinessPassportPanel({
           ))}
         </ul>
       )}
+      <TransactionEvidenceInspector passport={passport} />
       <ul className="result__list">
         {passport.limitations.map((limitation) => (
           <li key={limitation}>{limitation}</li>
