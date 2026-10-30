@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { NetworkPanel } from './components/NetworkPanel';
 import { ReadinessForm, type ReadinessFormValues } from './components/ReadinessForm';
@@ -8,8 +8,11 @@ import { useNodeConnection } from './hooks/useNodeConnection';
 import { useWallet } from './hooks/useWallet';
 import { WalletPanel } from './components/WalletPanel';
 import { WalletBalanceOverview } from './components/WalletBalanceOverview';
+import { TransactionReadinessPassportPanel } from './components/TransactionReadinessPassport';
+import { buildTransactionReadinessPassport } from './lib/passport';
 import { DEFAULT_WS_URL, EXPECTED_NETWORK } from './lib/chain';
 import { runReadinessCheck, type ReadinessResult } from './lib/readiness';
+import { readEvmIdentity, type EvmIdentitySnapshot } from './lib/evmChain';
 
 const ENDPOINT = import.meta.env.VITE_PORTALDOT_WS_URL || DEFAULT_WS_URL;
 
@@ -20,6 +23,7 @@ export default function App() {
   const wallet = useWallet();
   const [form, setForm] = useState<ReadinessFormValues>(EMPTY_FORM);
   const [result, setResult] = useState<ReadinessResult | null>(null);
+  const [evmSnapshot, setEvmSnapshot] = useState<EvmIdentitySnapshot | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [lastNetworkUpdate, setLastNetworkUpdate] = useState<number | null>(null);
@@ -29,6 +33,22 @@ export default function App() {
 
   const decimals = connection.network?.tokenDecimals ?? EXPECTED_NETWORK.tokenDecimals;
   const ss58Prefix = connection.network?.ss58Prefix ?? null;
+
+  const passport = useMemo(
+    () =>
+      buildTransactionReadinessPassport({
+        network: connection.network,
+        expectedGenesisHash: EXPECTED_NETWORK.genesisHash,
+        walletAddress: wallet.selectedAddress,
+        walletConnected: wallet.status === 'connected',
+        signerInterfaceDetected: wallet.signerAvailable,
+        decimals,
+        result,
+        revealAddresses: false,
+        evmSnapshot,
+      }),
+    [connection.network, wallet.selectedAddress, wallet.status, wallet.signerAvailable, decimals, result, evmSnapshot],
+  );
 
   useEffect(() => {
     if (connection.network) {
@@ -40,6 +60,7 @@ export default function App() {
 
   useEffect(() => {
     setResult(null);
+    setEvmSnapshot(null);
     setRunError(null);
   }, [form, wallet.selectedAddress, connection.state, connection.network]);
 
@@ -65,10 +86,12 @@ export default function App() {
         amount: form.amount.trim(),
         ss58Prefix,
       });
+      const evmOutcome = await readEvmIdentity();
       if (token !== runTokenRef.current) {
         return;
       }
       setResult(outcome);
+      setEvmSnapshot(evmOutcome);
     } catch (err) {
       if (token !== runTokenRef.current) {
         return;
@@ -148,6 +171,8 @@ export default function App() {
             getApi={connection.getApi}
             networkState={connection.state}
           />
+
+          <TransactionReadinessPassportPanel passport={passport} />
 
           <ReadinessChecklist
             walletConnected={wallet.status === 'connected'}
