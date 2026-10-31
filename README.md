@@ -1,82 +1,128 @@
 # ChainRelay Recon
 
-**Problem:** Before submitting a Substrate/Portaldot transfer, users need a way to validate intents, check balances and fees, and simulate execution without risking funds or broadcasting transactions.
+**ChainRelay is a Portaldot V3 transaction-readiness and evidence diagnostics dashboard.**
 
-**What it does:** ChainRelay Recon is a read-only execution pipeline for Portaldot/Substrate chains. It validates transfer intents, constructs unsigned calls, estimates fees, runs conservative preflight checks, optionally dry-runs via RPC, and produces structured JSON receipts.
+**Know before you transact.**
 
-## Verified Capabilities
+ChainRelay helps users inspect network identity, transaction readiness, fee and balance evidence, simulation results, and transaction intent before any signing or submission. It is read-only and does not sign, submit, or broadcast transactions.
 
-- **Intent validation** - SS58 (prefix 42), amount format/precision (14 decimals), action validation
-- **Call construction** - Builds unsigned extrinsics for `transfer`, `transferKeepAlive`, `transferAll`
-- **Fee estimation** - Prefers `call.paymentInfo()`, falls back to `rpc.payment.queryInfo()`
-- **Preflight checks** - Balance sufficiency, account existence (with inconclusive handling), frozen/reserved awareness; compatible with legacy (`miscFrozen`/`feeFrozen`) and V3 (`frozen`/`flags`) account layouts
-- **Dry-run simulation** - Uses `rpc.system.dryRun()` when connected (read-only)
-- **Structured receipts** - Execution status (`PLANNED` / `FEE_ESTIMATED` / `SIMULATION_PASSED` / `SIMULATION_FAILED`) with evidence and limitations
-- **Offline operation** - Works with mocked APIs for testing and demo
-- **Portaldot V3 testnet** - Verified against `wss://test-node-v3.portaldot.dev` (chain `PortaldotV3 Test`, runtime spec `portaldot-v3` 3002)
+## Implemented Capabilities
 
-## Quick Start
+- Transaction Readiness Passport for the supported Portaldot transfer flow.
+- Explainable readiness failures and diagnostic findings.
+- Substrate network identity and runtime information, including genesis hash, spec name, spec version, implementation version, transaction version, and metadata availability.
+- Optional EVM endpoint identity checks when `VITE_PORTALDOT_EVM_RPC_URL` is configured.
+- Explicitly inconclusive cross-interface Substrate/EVM equivalence where equivalence is not documented.
+- Transaction Evidence Inspector.
+- Read-only transaction intent verification for the supported `balances.transferKeepAlive` flow.
+- Recipient, amount, sender, balance, fee, and simulation evidence checks for the supported transfer flow.
+- Runtime association using available genesis hash and runtime identity evidence.
+- Encoded call evidence capture, including call bytes and capture timestamp.
+- Privacy-conscious address redaction in displayed/exported evidence.
+- UI grouping/collapsing of secondary technical evidence.
+
+Statuses used by the application include: `VERIFIED`, `FAILED`, `WARNING`, `INCONCLUSIVE`, `NOT_TESTED`, `UNAVAILABLE`, `CAPTURED`, and `UNSUPPORTED`. `CAPTURED` means encoded call evidence was captured and associated with runtime provenance; it does not mean the call was independently decoded or proven safe.
+
+## Security Investigation Progress
+
+Implemented work:
+
+- S0: security feasibility and architecture reconnaissance.
+- S1–S4: read-only transaction intent, recipient/amount, fee/balance, and simulation evidence hardening.
+- S7: runtime association hardening.
+- S9: encoded call evidence capture.
+
+Research/reconnaissance only:
+
+- S5: wallet signer compatibility reconnaissance.
+- S6: runtime metadata enrichment reconnaissance.
+- S8: metadata-backed decoding feasibility assessment; no production implementation.
+- S10–S11: decoding feasibility reassessment and API-level experiment; not production decoding.
+- S12: blocked because genuine Portaldot V3 runtime metadata with authoritative provenance was unavailable.
+
+S5, S6, S8, S10, S11, and S12 are research outcomes, not shipped protection features.
+
+## Architecture and Data Flow
+
+ChainRelay combines a CLI/core execution pipeline with a web dashboard:
+
+1. Network identity and runtime evidence are collected from the connected Substrate node.
+2. Account, fee, preflight, and dry-run evidence are gathered through read-only RPC calls.
+3. The constructed `balances.transferKeepAlive` call is represented as a Transaction Readiness Passport.
+4. Diagnostics and explainable failures are derived from readiness evidence.
+5. Transaction intent verification compares original intent with constructed evidence, including recipient, amount, sender, balance, fee, simulation, runtime association, and encoded call capture.
+6. Evidence is presented through the Passport, diagnostics, and Transaction Evidence Inspector.
+
+No signing, wallet permission requests, or transaction submission occur in the readiness/intent verification flow.
+
+## Setup
 
 ```bash
-# Install dependencies
+# Install root dependencies
 npm install
 
-# Run all tests (160 passing)
-npm test
-
-# Run offline demo (mocked, no network)
-npm run demo
-
-# Run network doctor against the V3 testnet
-PORTALDOT_WS_URL='wss://test-node-v3.portaldot.dev' npm run doctor
-
-# Run live read-only V3 demo
-PORTALDOT_WS_URL='wss://test-node-v3.portaldot.dev' npm run demo:v3
-```
-
-The live commands require network access to the endpoint. `npm test` and `npm run demo` are fully offline.
-
-## How It Works
-
-1. **Validate** intent schema, addresses, amount and deadline
-2. **Construct** the unsigned extrinsic call for the requested action
-3. **Connect** to the endpoint (live read-only) or use mocked dependencies (offline)
-4. **Estimate fees** via `paymentInfo` or the `queryInfo` fallback
-5. **Preflight** balances, frozen and reserved amounts (conservative when runtime semantics are uncertain)
-6. **Simulate** via `rpc.system.dryRun` when connected (read-only, no state change)
-7. **Emit receipt** with execution status, evidence and limitations
-
-## Limitations
-
-- **No signing or submission** - ChainRelay is read-only. No transaction is signed, broadcast, or executed
-- **Fee estimates are not guarantees** - Actual fees may differ due to tips, weight changes, or runtime upgrades
-- **Dry-run is simulation, not execution** - `rpc.system.dryRun` does not change chain state
-- **`BadOrigin` is expected for unsigned calls** - Unsigned extrinsics fail dry-run on pallets that require a signed origin. This is an unsigned-simulation limitation, not evidence that a signed transfer would fail
-- **Preflight is not a guarantee** - Passing preflight does not guarantee transaction execution
-- **V3 frozen balances** - The frozen balance breakdown is not exposed on V3, so ChainRelay reports the uncertainty and applies conservative handling instead of guessing a mapping
-- **Portaldot-focused** - Built for Portaldot/Substrate with a 14-decimal POT asset and SS58 prefix 42
-
-ChainRelay does not perform cross-chain bridging, broadcasting, or on-chain execution.
-
-## Web Dashboard Demo
-
-```bash
 # Install web dependencies
 cd web
 npm install
+cd ..
+```
 
-# Run web tests
+Optional environment variable:
+
+```bash
+VITE_PORTALDOT_EVM_RPC_URL=https://example-rpc-url
+```
+
+Do not invent or hardcode an official Portaldot EVM RPC endpoint. The EVM check is optional and only runs when configured.
+
+## Development and Testing
+
+Root CLI/core:
+
+```bash
 npm test
+npm run demo
+PORTALDOT_WS_URL='wss://test-node-v3.portaldot.dev' npm run doctor
+PORTALDOT_WS_URL='wss://test-node-v3.portaldot.dev' npm run demo:v3
+```
 
-# Type-check and build
+Web dashboard:
+
+```bash
+cd web
+npm test
+npm run typecheck
 npm run build
-
-# Start local dev server
 npm run dev
 ```
 
-Open the local Vite URL, connect to `wss://test-node-v3.portaldot.dev`, inspect metadata, connect wallet via explicit click, enter recipient and amount, then run readiness check. No signing or submission occurs.
+`npm test` and `npm run demo` are fully offline. Live commands require network access to the endpoint.
 
+## Known Limitations
 
-- [Architecture](docs/ARCHITECTURE.md) - Pipeline flow, component responsibilities, and safety guarantees
-- [Development](docs/DEVELOPMENT.md) - Test commands and extension guide
+- Independent metadata-backed call decoding is not implemented.
+- S9 call-byte capture is not proof of independent decoding or transaction safety.
+- S12 is blocked pending authoritative Portaldot V3 metadata and documented provenance.
+- Only the supported `balances.transferKeepAlive` flow is covered by the current intent-verification implementation.
+- Batch, proxy, multisig, token approval, NFT approval, and general contract-call analysis are not supported.
+- No general malicious-address reputation or scam-detection engine exists.
+- No signed transaction simulation or guarantee of execution success.
+- No wallet signing or transaction submission is performed by the readiness/intent verification flow.
+- Portaldot custom signed extensions `AuthorizeCall` and `EthSetOrigin` remain insufficiently documented/verified for wallet compatibility.
+- EVM endpoint configuration is optional.
+- Cross-interface Substrate/EVM equivalence remains inconclusive without authoritative documentation.
+
+## Roadmap
+
+Potential next steps, not currently implemented:
+
+- Obtain genuine Portaldot V3 metadata with authoritative provenance.
+- Reassess narrow transfer-only metadata-backed decoding.
+- Investigate documented wallet compatibility and custom signed extensions.
+- Expand transaction-call coverage only after evidence-backed validation.
+- Explore security detection only after reliable decoding and simulation capabilities exist.
+
+## References
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Development](docs/DEVELOPMENT.md)
