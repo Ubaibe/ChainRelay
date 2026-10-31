@@ -699,3 +699,9 @@ code {
     text-align: center;
   }
 }
+
+/* ---------------------------------------------------------------- details */
+.details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-raised); margin: 12px 0; }
+.details__summary { cursor: pointer; padding: 10px 12px; font-weight: 600; list-style: none; }
+.details__summary::-webkit-details-marker { display: none; }
+.details__body { padding: 0 12px 12px; display: grid; gap: 12px; }

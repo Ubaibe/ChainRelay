@@ -152,34 +152,38 @@ export default function App() {
             </p>
           </section>
 
-          <NetworkPanel
-            endpoint={ENDPOINT}
-            state={connection.state}
-            error={connection.error}
-            network={connection.network}
-            onReconnect={() => void connection.connect()}
-            busy={connection.busy}
-            lastUpdated={lastNetworkUpdate}
-          />
+          <details className="details">
+            <summary className="details__summary">Secondary technical details</summary>
+            <div className="details__body">
+              <NetworkPanel
+                endpoint={ENDPOINT}
+                state={connection.state}
+                error={connection.error}
+                network={connection.network}
+                onReconnect={() => void connection.connect()}
+                busy={connection.busy}
+                lastUpdated={lastNetworkUpdate}
+              />
 
-          <WalletPanel wallet={wallet} />
+              <WalletPanel wallet={wallet} />
 
-          <WalletBalanceOverview
-            walletAddress={wallet.selectedAddress}
-            result={result}
-            decimals={decimals}
-            getApi={connection.getApi}
-            networkState={connection.state}
-          />
+              <WalletBalanceOverview
+                walletAddress={wallet.selectedAddress}
+                result={result}
+                decimals={decimals}
+                getApi={connection.getApi}
+                networkState={connection.state}
+              />
 
-          <TransactionReadinessPassportPanel passport={passport} />
+              <TransactionReadinessPassportPanel passport={passport} />
 
-          <ReadinessChecklist
-            walletConnected={wallet.status === 'connected'}
-            networkOk={connection.state === 'connected' && !connection.error}
-            result={result}
-          />
-
+              <ReadinessChecklist
+                walletConnected={wallet.status === 'connected'}
+                networkOk={connection.state === 'connected' && !connection.error}
+                result={result}
+              />
+            </div>
+          </details>
 
           <section className="panel">
             <header className="panel__header">
