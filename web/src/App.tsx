@@ -138,18 +138,29 @@ export default function App() {
           <section className="intro">
             <h2 className="intro__title">What ChainRelay does</h2>
             <p>
-              ChainRelay inspects a Substrate/Portaldot chain before you
-              transact. It validates an intent, reads account balances,
-              estimates the fee for an unsigned call, runs conservative preflight
-              checks and reports every assumption it could not verify.
+              ChainRelay helps you understand a transaction before you sign it.
+              Focused on Portaldot V3, it examines network and runtime identity,
+              checks a supported transfer against your intended recipient and
+              amount, reviews balance and fee estimates, and evaluates available
+              preflight simulation evidence.
+            </p>
+            <p>
+              Its Transaction Readiness Passport, explainable diagnostics, and
+              Evidence Inspector bring these findings together—showing what has
+              been verified, what has failed, and what remains uncertain.
             </p>
             <h3 className="intro__subtitle">What it does not do yet</h3>
             <p>
-              ChainRelay never signs, broadcasts or submits a transaction, and
-              it does not verify on-chain execution. A fee estimate is an
-              estimate, and a passing preflight check is not a guarantee that a
-              transfer will succeed.
+              ChainRelay does not sign, broadcast, or submit transactions, and
+              it does not verify on-chain execution. Fee estimates and preflight
+              checks cannot guarantee successful execution. Transaction-intent
+              verification currently supports a limited transfer flow;
+              independent metadata-backed call decoding and general
+              malicious-transaction detection are not implemented. When evidence
+              is incomplete, ChainRelay reports the uncertainty rather than
+              claiming a transaction is safe.
             </p>
+            <p><strong>Know before you transact.</strong></p>
           </section>
 
           <details className="details">

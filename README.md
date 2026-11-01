@@ -6,6 +6,18 @@
 
 ChainRelay helps users inspect network identity, transaction readiness, fee and balance evidence, simulation results, and transaction intent before any signing or submission. It is read-only and does not sign, submit, or broadcast transactions.
 
+## What ChainRelay does
+
+ChainRelay helps you understand a transaction before you sign it. Focused on Portaldot V3, it examines network and runtime identity, checks a supported transfer against your intended recipient and amount, reviews balance and fee estimates, and evaluates available preflight simulation evidence.
+
+Its Transaction Readiness Passport, explainable diagnostics, and Evidence Inspector bring these findings together—showing what has been verified, what has failed, and what remains uncertain.
+
+## What it does not do yet
+
+ChainRelay does not sign, broadcast, or submit transactions, and it does not verify on-chain execution. Fee estimates and preflight checks cannot guarantee successful execution. Transaction-intent verification currently supports a limited transfer flow; independent metadata-backed call decoding and general malicious-transaction detection are not implemented. When evidence is incomplete, ChainRelay reports the uncertainty rather than claiming a transaction is safe.
+
+**Know before you transact.**
+
 ## Implemented Capabilities
 
 - Transaction Readiness Passport for the supported Portaldot transfer flow.
