@@ -99,6 +99,7 @@ code {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
 
 .masthead__tagline {
   margin: 1px 0 0;
@@ -107,6 +108,7 @@ code {
 }
 
 .pill {
+  flex: none;
   font-size: 12px;
   font-weight: 500;
   padding: 4px 11px;
@@ -236,6 +238,7 @@ code {
 }
 
 .row__label {
+  flex: none;
   font-size: 12.5px;
   color: var(--text-muted);
 }
@@ -303,6 +306,7 @@ code {
 
 .state__dot {
   width: 7px;
+  flex: none;
   height: 7px;
   border-radius: 50%;
   background: var(--neutral);
@@ -637,6 +641,7 @@ code {
 }
 
 .account-btn__source {
+  flex: none;
   font-size: 10.5px;
   color: var(--text-dim);
 }
