@@ -110,7 +110,7 @@ export default function App() {
       <header className="masthead">
         <div className="masthead__inner">
           <div className="masthead__identity">
-            <span className="masthead__mark" aria-hidden="true" />
+            <img className="masthead__logo" src="/chainrelay-logo.png" alt="ChainRelay — Cross-Chain Readiness &amp; Relay" />
             <div>
               <h1 className="masthead__title">ChainRelay Recon</h1>
               <p className="masthead__tagline">

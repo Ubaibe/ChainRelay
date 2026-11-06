@@ -87,13 +87,11 @@ code {
   min-width: 0;
 }
 
-.masthead__mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: 1px solid var(--accent-dim);
-  background: rgba(90, 200, 192, 0.08);
-  flex: none;
+.masthead__logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .masthead__title {
@@ -101,7 +99,6 @@ code {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
-}
 
 .masthead__tagline {
   margin: 1px 0 0;
@@ -110,7 +107,6 @@ code {
 }
 
 .pill {
-  flex: none;
   font-size: 12px;
   font-weight: 500;
   padding: 4px 11px;
@@ -242,7 +238,6 @@ code {
 .row__label {
   font-size: 12.5px;
   color: var(--text-muted);
-  flex: none;
 }
 
 .row__hint {
@@ -311,7 +306,6 @@ code {
   height: 7px;
   border-radius: 50%;
   background: var(--neutral);
-  flex: none;
 }
 
 .state--connected {
@@ -643,7 +637,6 @@ code {
 }
 
 .account-btn__source {
-  flex: none;
   font-size: 10.5px;
   color: var(--text-dim);
 }
